@@ -1,0 +1,178 @@
+{
+  "products": [
+    {
+      "id": "P001",
+      "name": "Power Bank",
+      "price": 1200,
+      "daily_demand": 18
+    },
+    {
+      "id": "P002",
+      "name": "Wireless Earbuds",
+      "price": 2500,
+      "daily_demand": 12
+    },
+    {
+      "id": "P003",
+      "name": "Smart Watch",
+      "price": 3500,
+      "daily_demand": 8
+    },
+    {
+      "id": "P004",
+      "name": "Bluetooth Speaker",
+      "price": 1800,
+      "daily_demand": 10
+    },
+    {
+      "id": "P005",
+      "name": "USB-C Charger",
+      "price": 800,
+      "daily_demand": 25
+    }
+  ],
+  "regions": [
+  {
+    "id": "R001",
+    "name": "Chennai",
+    "demand_multiplier": 1.15
+  },
+  {
+    "id": "R002",
+    "name": "Bengaluru",
+    "demand_multiplier": 0.9
+  },
+  {
+    "id": "R003",
+    "name": "Hyderabad",
+    "demand_multiplier": 1.0
+  }
+],
+  "suppliers": [
+    {
+      "id": "S001",
+      "name": "TechSource India",
+      "lead_time_days": 5,
+      "reliability": 0.92
+    },
+    {
+      "id": "S002",
+      "name": "SmartSupply Co",
+      "lead_time_days": 8,
+      "reliability": 0.85
+    },
+    {
+      "id": "S003",
+      "name": "Express Electronics",
+      "lead_time_days": 3,
+      "reliability": 0.78
+    }
+  ],
+  "inventory": [
+    {
+      "product_id": "P001",
+      "region_id": "R001",
+      "supplier_id": "S001",
+      "quantity": 90,
+      "capacity": 200
+    },
+    {
+      "product_id": "P001",
+      "region_id": "R002",
+      "supplier_id": "S001",
+      "quantity": 140,
+      "capacity": 200
+    },
+    {
+      "product_id": "P001",
+      "region_id": "R003",
+      "supplier_id": "S002",
+      "quantity": 60,
+      "capacity": 200
+    },
+    {
+      "product_id": "P002",
+      "region_id": "R001",
+      "supplier_id": "S002",
+      "quantity": 45,
+      "capacity": 150
+    },
+    {
+      "product_id": "P002",
+      "region_id": "R002",
+      "supplier_id": "S001",
+      "quantity": 110,
+      "capacity": 150
+    },
+    {
+      "product_id": "P002",
+      "region_id": "R003",
+      "supplier_id": "S003",
+      "quantity": 35,
+      "capacity": 150
+    },
+    {
+      "product_id": "P003",
+      "region_id": "R001",
+      "supplier_id": "S001",
+      "quantity": 30,
+      "capacity": 100
+    },
+    {
+      "product_id": "P003",
+      "region_id": "R002",
+      "supplier_id": "S002",
+      "quantity": 75,
+      "capacity": 100
+    },
+    {
+      "product_id": "P003",
+      "region_id": "R003",
+      "supplier_id": "S001",
+      "quantity": 50,
+      "capacity": 100
+    },
+    {
+      "product_id": "P004",
+      "region_id": "R001",
+      "supplier_id": "S003",
+      "quantity": 40,
+      "capacity": 120
+    },
+    {
+      "product_id": "P004",
+      "region_id": "R002",
+      "supplier_id": "S001",
+      "quantity": 90,
+      "capacity": 120
+    },
+    {
+      "product_id": "P004",
+      "region_id": "R003",
+      "supplier_id": "S002",
+      "quantity": 55,
+      "capacity": 120
+    },
+    {
+      "product_id": "P005",
+      "region_id": "R001",
+      "supplier_id": "S001",
+      "quantity": 130,
+      "capacity": 250
+    },
+    {
+      "product_id": "P005",
+      "region_id": "R002",
+      "supplier_id": "S003",
+      "quantity": 180,
+      "capacity": 250
+    },
+    {
+      "product_id": "P005",
+      "region_id": "R003",
+      "supplier_id": "S002",
+      "quantity": 70,
+      "capacity": 250
+    }
+  ]
+}
