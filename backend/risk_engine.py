@@ -54,13 +54,15 @@ def get_regional_daily_demand(
         * region["demand_multiplier"]
     )
 
-    if (
-        disruption
-        and disruption["type"] == "demand_shock"
-        and disruption.get("product_id") == product["id"]
-        and disruption.get("region_id") == region["id"]
-    ):
-        daily_demand *= disruption["shock_multiplier"]
+    disruptions = disruption if isinstance(disruption, list) else [disruption]
+    for current_disruption in disruptions:
+        if (
+            current_disruption
+            and current_disruption["type"] == "demand_shock"
+            and current_disruption.get("product_id") == product["id"]
+            and current_disruption.get("region_id") == region["id"]
+        ):
+            daily_demand *= current_disruption["shock_multiplier"]
 
     return round(daily_demand, 2)
 
@@ -186,15 +188,16 @@ def analyze_inventory(
         )
 
         # Apply supplier disruption
-        if (
-            disruption
-            and disruption["type"] == "supplier_shock"
-            and disruption.get("supplier_id")
-            == supplier["id"]
-        ):
-            supplier_lead_time += (
-                disruption["delay_days"]
+        disruptions = disruption if isinstance(disruption, list) else [disruption]
+        supplier_lead_time += sum(
+            current_disruption["delay_days"]
+            for current_disruption in disruptions
+            if (
+                current_disruption
+                and current_disruption["type"] == "supplier_shock"
+                and current_disruption.get("supplier_id") == supplier["id"]
             )
+        )
 
         risk_level = calculate_stockout_risk(
             days_of_stock,
@@ -224,6 +227,7 @@ def analyze_inventory(
             "supplier_name": supplier["name"],
 
             "current_inventory": item["quantity"],
+            "capacity": item["capacity"],
 
             "daily_demand": daily_demand,
 

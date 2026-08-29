@@ -1,11 +1,37 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./App.css";
+
+const API_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 
 function App() {
   const [analysis, setAnalysis] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [aiInsights, setAiInsights] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [hoveredHistoryPoint, setHoveredHistoryPoint] = useState(null);
+  const [aiQuestion, setAiQuestion] = useState("");
+  const [aiAnswer, setAiAnswer] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [alerts, setAlerts] = useState([]);
+  const [notificationMessage, setNotificationMessage] = useState("");
+  const [forecasts, setForecasts] = useState([]);
+  const [activePage, setActivePage] = useState("overview");
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantPosition, setAssistantPosition] = useState({
+    right: 24,
+    bottom: 24,
+  });
+  const [draggingAssistant, setDraggingAssistant] = useState(false);
+  const assistantMovedRef = useRef(false);
+  const [user, setUser] = useState(
+    JSON.parse(localStorage.getItem("stockshield_user") || "null")
+  );
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [editQuantity, setEditQuantity] = useState("");
+  const [editCapacity, setEditCapacity] = useState("");
 
   // Recovery simulation
   const [selectedItem, setSelectedItem] = useState(null);
@@ -40,13 +66,18 @@ function App() {
 
   const [disruptionError, setDisruptionError] =
     useState("");
+  const [scenarioResult, setScenarioResult] = useState(null);
+  const [scenarioLoading, setScenarioLoading] = useState(false);
+  const [recoveryPlans, setRecoveryPlans] = useState([]);
+  const [supplierScorecards, setSupplierScorecards] = useState([]);
+  const [importMessage, setImportMessage] = useState("");
 
   // --------------------------------------------------
   // LOAD INVENTORY ANALYSIS
   // --------------------------------------------------
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/api/inventory-analysis")
+    fetch(`${API_URL}/api/inventory-analysis`)
       .then((response) => {
         if (!response.ok) {
           throw new Error(
@@ -58,6 +89,16 @@ function App() {
       })
       .then((data) => {
         setAnalysis(data.analysis || []);
+        return fetch(`${API_URL}/api/inventory-history`);
+      })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to fetch inventory history");
+        }
+        return response.json();
+      })
+      .then((data) => {
+        setHistory(data.history || []);
         setLoading(false);
       })
       .catch((error) => {
@@ -72,7 +113,44 @@ function App() {
   }, []);
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/api/ai-insights")
+    fetch(`${API_URL}/api/supplier-scorecards`)
+      .then((response) => {
+        if (!response.ok) throw new Error("Failed to fetch supplier scorecards");
+        return response.json();
+      })
+      .then((data) => setSupplierScorecards(data.suppliers || []))
+      .catch((supplierError) => console.error(supplierError));
+  }, []);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/recovery-plans`)
+      .then((response) => response.json())
+      .then((data) => setRecoveryPlans(data.plans || []))
+      .catch((plansError) => console.error(plansError));
+  }, []);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/ml-forecast`)
+      .then((response) => {
+        if (!response.ok) throw new Error("Failed to fetch ML forecasts");
+        return response.json();
+      })
+      .then((data) => setForecasts(data.forecasts || []))
+      .catch((forecastError) => console.error(forecastError));
+  }, []);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/alerts`)
+      .then((response) => {
+        if (!response.ok) throw new Error("Failed to fetch alerts");
+        return response.json();
+      })
+      .then((data) => setAlerts(data.alerts || []))
+      .catch((alertError) => console.error(alertError));
+  }, []);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/ai-insights`)
       .then((response) => {
         if (!response.ok) {
           throw new Error("Failed to fetch AI insights");
@@ -111,12 +189,193 @@ function App() {
     0
   );
 
+  const historicalPoints = history.map((snapshot, index) => {
+    const x = history.length === 1 ? 400 : (index / (history.length - 1)) * 760 + 20;
+    const values = history.map((item) => item.revenue_at_risk);
+    const minRisk = Math.min(...values);
+    const maxRisk = Math.max(...values);
+    const range = maxRisk - minRisk || 1;
+    const y = 170 - ((snapshot.revenue_at_risk - minRisk) / range) * 125;
+    return { ...snapshot, x, y, pointIndex: index };
+  });
+  const historicalLine = historicalPoints.map((point) => `${point.x},${point.y}`).join(" ");
+  const historicalExposureIsFlat = history.every(
+    (snapshot) => snapshot.revenue_at_risk === history[0]?.revenue_at_risk
+  );
+
   const formatCurrency = (value) => {
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency: "INR",
       maximumFractionDigits: 0,
     }).format(value || 0);
+  };
+
+  const askAI = () => {
+    if (!aiQuestion.trim()) return;
+    setAiLoading(true);
+    fetch(`${API_URL}/api/ai-chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: aiQuestion }),
+    })
+      .then((response) => {
+        return response.json().then((data) => {
+          if (!response.ok) {
+            throw new Error(data.detail || data.error || "AI assistant request failed");
+          }
+          return data;
+        });
+      })
+      .then((data) => {
+        setAiAnswer(data);
+        setAiLoading(false);
+      })
+      .catch((chatError) => {
+        setAiAnswer({
+          answer: chatError.message,
+          model: "Assistant error",
+          source: "error",
+        });
+        setAiLoading(false);
+      });
+  };
+
+  const handleLogin = () => {
+    setLoginError("");
+    fetch(`${API_URL}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Invalid username or password");
+        }
+        return response.json();
+      })
+      .then((data) => {
+        localStorage.setItem("stockshield_token", data.token);
+        localStorage.setItem("stockshield_user", JSON.stringify(data.user));
+        setUser(data.user);
+        setPassword("");
+      })
+      .catch((loginException) => setLoginError(loginException.message));
+  };
+
+  const saveInventory = () => {
+    if (!selectedItem || user?.role !== "admin") return;
+    fetch(
+      `${API_URL}/api/inventory/${selectedItem.product_id}/${selectedItem.region_id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("stockshield_token")}`,
+        },
+        body: JSON.stringify({
+          supplier_id: selectedItem.supplier_id,
+          quantity: Number(editQuantity),
+          capacity: Number(editCapacity),
+        }),
+      }
+    )
+      .then((response) => {
+        if (!response.ok) throw new Error("Failed to update inventory");
+        window.location.reload();
+      })
+      .catch((saveError) => setError(saveError.message));
+  };
+
+  const importInventory = (event) => {
+    const file = event.target.files?.[0];
+    if (!file || user?.role !== "admin") return;
+    const formData = new FormData();
+    formData.append("file", file);
+    setImportMessage("Importing...");
+    fetch(`${API_URL}/api/inventory-import`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("stockshield_token")}`,
+      },
+      body: formData,
+    })
+      .then((response) => response.json().then((data) => {
+        if (!response.ok) throw new Error(data.detail || "Import failed");
+        return data;
+      }))
+      .then((data) => {
+        setImportMessage(`${data.updated} inventory rows updated.`);
+        window.location.reload();
+      })
+      .catch((importError) => setImportMessage(importError.message));
+  };
+
+  const saveRecoveryPlan = () => {
+    if (!simulation?.recommended_strategy || !selectedItem || user?.role !== "admin") {
+      return;
+    }
+    fetch(`${API_URL}/api/recovery-plans`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("stockshield_token")}`,
+      },
+      body: JSON.stringify({
+        product_id: selectedItem.product_id,
+        region_id: selectedItem.region_id,
+        strategy: simulation.recommended_strategy,
+      }),
+    })
+      .then((response) => {
+        return response.json().then((data) => {
+          if (!response.ok) {
+            throw new Error(data.detail || "Failed to save recovery plan");
+          }
+          return data;
+        });
+      })
+      .then(() => fetch(`${API_URL}/api/recovery-plans`))
+      .then((response) => response.json())
+      .then((data) => setRecoveryPlans(data.plans || []))
+      .catch((planError) => setSimulationError(planError.message));
+  };
+
+  const updatePlanStatus = (planId, status) => {
+    fetch(`${API_URL}/api/recovery-plans/${planId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("stockshield_token")}`,
+      },
+      body: JSON.stringify({ status }),
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("Failed to update recovery plan");
+        return response.json();
+      })
+      .then(() => setRecoveryPlans((plans) =>
+        plans.map((plan) => plan.id === planId ? { ...plan, status } : plan)
+      ))
+      .catch((planError) => setSimulationError(planError.message));
+  };
+
+  const sendAlertDigest = () => {
+    setNotificationMessage("");
+    fetch(`${API_URL}/api/alerts/notify`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("stockshield_token")}`,
+      },
+    })
+      .then((response) => response.json().then((data) => {
+        if (!response.ok) {
+          throw new Error(data.detail || "Unable to send alert digest");
+        }
+        return data;
+      }))
+      .then((data) => setNotificationMessage(data.message))
+      .catch((notificationError) => setNotificationMessage(notificationError.message));
   };
 
   // --------------------------------------------------
@@ -173,13 +432,15 @@ function App() {
 
   const handleProductClick = (item) => {
     setSelectedItem(item);
+    setEditQuantity(item.current_inventory);
+    setEditCapacity(item.capacity || item.current_inventory);
 
     setSimulation(null);
     setSimulationError("");
     setSimulationLoading(true);
 
     fetch(
-      `http://127.0.0.1:8000/api/simulate-recovery/${item.product_id}/${item.region_id}`
+      `${API_URL}/api/simulate-recovery/${item.product_id}/${item.region_id}`
     )
       .then((response) => {
         if (!response.ok) {
@@ -231,6 +492,7 @@ function App() {
         increase_percentage:
           Number(increasePercentage),
       };
+
     }
 
     if (disruptionType === "supplier_shock") {
@@ -247,12 +509,13 @@ function App() {
         supplier_id: selectedSupplier,
         delay_days: Number(delayDays),
       };
+
     }
 
     setDisruptionLoading(true);
 
     fetch(
-      "http://127.0.0.1:8000/api/inject-disruption",
+      `${API_URL}/api/inject-disruption`,
       {
         method: "POST",
 
@@ -285,6 +548,100 @@ function App() {
 
         setDisruptionLoading(false);
       });
+  };
+
+  const handleScenarioSimulation = () => {
+    const disruptions = [];
+    if (selectedProduct && selectedRegion) {
+      disruptions.push({
+        type: "demand_shock",
+        product_id: selectedProduct,
+        region_id: selectedRegion,
+        increase_percentage: Number(increasePercentage),
+      });
+    }
+    if (selectedSupplier) {
+      disruptions.push({
+        type: "supplier_shock",
+        supplier_id: selectedSupplier,
+        delay_days: Number(delayDays),
+      });
+    }
+    if (disruptions.length < 2) {
+      setDisruptionError(
+        "Select both a demand shock and supplier delay to compare a combined scenario"
+      );
+      return;
+    }
+    setScenarioLoading(true);
+    setScenarioResult(null);
+    fetch(`${API_URL}/api/simulate-scenario`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ disruptions }),
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("Failed to simulate combined scenario");
+        return response.json();
+      })
+      .then((data) => {
+        setScenarioResult(data);
+        setScenarioLoading(false);
+      })
+      .catch((scenarioError) => {
+        setDisruptionError(scenarioError.message);
+        setScenarioLoading(false);
+      });
+  };
+
+  const clearDisruptionForm = () => {
+    setDisruptionType("demand_shock");
+    setSelectedProduct("");
+    setSelectedRegion("");
+    setIncreasePercentage(50);
+    setSelectedSupplier("");
+    setDelayDays(3);
+    setDisruptionResult(null);
+    setScenarioResult(null);
+    setDisruptionError("");
+  };
+
+  const handleAssistantDrag = (event) => {
+    event.preventDefault();
+    assistantMovedRef.current = false;
+    setDraggingAssistant(true);
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startPosition = assistantPosition;
+
+    const moveAssistant = (moveEvent) => {
+      assistantMovedRef.current = true;
+      setAssistantPosition({
+        right: Math.max(
+          12,
+          Math.min(
+            window.innerWidth - 80,
+            startPosition.right - (moveEvent.clientX - startX)
+          )
+        ),
+        bottom: Math.max(
+          12,
+          Math.min(
+            window.innerHeight - 70,
+            startPosition.bottom - (moveEvent.clientY - startY)
+          )
+        ),
+      });
+    };
+
+    const stopAssistantDrag = () => {
+      setDraggingAssistant(false);
+      window.removeEventListener("mousemove", moveAssistant);
+      window.removeEventListener("mouseup", stopAssistantDrag);
+    };
+
+    window.addEventListener("mousemove", moveAssistant);
+    window.addEventListener("mouseup", stopAssistantDrag);
   };
 
   // --------------------------------------------------
@@ -342,12 +699,27 @@ function App() {
 
       </header>
 
+      <nav className="page-nav" aria-label="Dashboard sections">
+        {[
+          ["overview", "Overview"],
+          ["inventory", "Inventory"],
+          ["disruptions", "Disruptions"],
+        ].map(([page, label]) => (
+          <button
+            className={activePage === page ? "active" : ""}
+            key={page}
+            onClick={() => setActivePage(page)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
 
       <main className="dashboard">
 
         {/* HERO */}
 
-        <section className="hero">
+        <section className={`hero page-section ${activePage !== "overview" ? "hidden-page" : ""}`}>
 
           <div>
             <h2>
@@ -362,10 +734,46 @@ function App() {
 
         </section>
 
+        {alerts.length > 0 && (
+          <section className={`alerts-panel page-section ${activePage !== "overview" ? "hidden-page" : ""}`}>
+            <div className="alerts-heading">
+              <div>
+                <span className="ai-eyebrow">Live monitoring</span>
+                <h2>Action required</h2>
+              </div>
+              <span className="alert-count">{alerts.length} alerts</span>
+            </div>
+            <div className="alerts-list">
+              {alerts.slice(0, 5).map((alert, index) => (
+                <div className={`alert-item ${alert.severity.toLowerCase()}`} key={`${alert.title}-${index}`}>
+                  <span className="alert-icon">
+                    {alert.severity === "Critical" ? "!" : "⚠"}
+                  </span>
+                  <div>
+                    <strong>{alert.title}</strong>
+                    <p>{alert.message}</p>
+                  </div>
+                  {alert.expected_lost_revenue > 0 && (
+                    <b>{formatCurrency(alert.expected_lost_revenue)}</b>
+                  )}
+                </div>
+              ))}
+            </div>
+            {user?.role === "admin" && (
+              <div className="notification-action">
+                <button className="clear-button" onClick={sendAlertDigest}>
+                  Send alert digest
+                </button>
+                {notificationMessage && <span>{notificationMessage}</span>}
+              </div>
+            )}
+          </section>
+        )}
+
 
         {/* STATS */}
 
-        <section className="stats-grid">
+        <section className={`stats-grid page-section ${activePage !== "overview" ? "hidden-page" : ""}`}>
 
           <div className="stat-card">
 
@@ -423,7 +831,7 @@ function App() {
 
         </section>
 
-        <section className="insights-grid">
+        <section className={`insights-grid page-section ${activePage !== "overview" ? "hidden-page" : ""}`}>
           <div className="visualization-card">
             <div className="section-header">
               <h2>Risk Distribution</h2>
@@ -491,7 +899,7 @@ function App() {
         </section>
 
         {aiInsights && (
-          <section className="ai-insights">
+          <section className={`ai-insights page-section ${activePage !== "overview" ? "hidden-page" : ""}`}>
             <div>
               <span className="ai-eyebrow">✦ {aiInsights.model}</span>
               <h2>AI Operations Brief</h2>
@@ -511,10 +919,143 @@ function App() {
           </section>
         )}
 
+        {assistantOpen && (
+        <section className="assistant-card floating-assistant">
+          <div className="section-header">
+            <span className="ai-eyebrow">✦ Ask StockShield</span>
+            <h2>Operations Assistant</h2>
+            <p>Ask NVIDIA Llama about risk, inventory, suppliers, or the next best action.</p>
+          </div>
+          <div className="assistant-form">
+            <input
+              value={aiQuestion}
+              onChange={(event) => setAiQuestion(event.target.value)}
+              onKeyDown={(event) => event.key === "Enter" && askAI()}
+              placeholder="Which location should I prioritize today?"
+            />
+            <button className="inject-button" onClick={askAI} disabled={aiLoading}>
+              {aiLoading ? "Thinking..." : "Ask AI"}
+            </button>
+          </div>
+          {aiAnswer && (
+            <div className="assistant-answer">
+              <strong>
+                {aiAnswer.model} · {aiAnswer.source}
+              </strong>
+              <p>{aiAnswer.answer}</p>
+              {aiAnswer.provider_error && (
+                <small>
+                  NVIDIA Llama was unavailable, so the local risk assistant answered this question.
+                  {" "}Provider detail: {aiAnswer.provider_error}
+                </small>
+              )}
+            </div>
+          )}
+        </section>
+        )}
+
+        <section className={`history-card page-section ${activePage !== "overview" ? "hidden-page" : ""}`}>
+          <div className="section-header">
+            <h2>Historical Exposure</h2>
+            <p>Daily snapshots persisted in the StockShield database.</p>
+          </div>
+          {history.length ? (
+            <>
+              <div className="history-chart" role="img" aria-label="Historical revenue exposure line graph">
+                <svg viewBox="0 0 800 240" preserveAspectRatio="xMidYMid meet">
+                <line x1="20" y1="45" x2="780" y2="45" className="history-gridline" />
+                <line x1="20" y1="107" x2="780" y2="107" className="history-gridline" />
+                <line x1="20" y1="170" x2="780" y2="170" className="history-axis" />
+                <polyline points={historicalLine} className="history-line" />
+                {historicalPoints.map((point) => (
+                  <g key={`${point.captured_at}-${point.pointIndex}`}>
+                    <circle
+                      cx={point.x}
+                      cy={point.y}
+                      r="5"
+                      className="history-dot"
+                      onMouseEnter={() => setHoveredHistoryPoint(point)}
+                      onMouseLeave={() => setHoveredHistoryPoint(null)}
+                    >
+                      <title>
+                        {`${formatCurrency(point.revenue_at_risk)} at risk`}
+                      </title>
+                    </circle>
+                    {hoveredHistoryPoint?.pointIndex === point.pointIndex && (
+                      <g className="history-tooltip" pointerEvents="none">
+                        <rect
+                          x={Math.min(Math.max(point.x - 70, 8), 652)}
+                          y={Math.max(point.y - 54, 6)}
+                          width="140"
+                          height="42"
+                          rx="7"
+                        />
+                        <text
+                          x={Math.min(Math.max(point.x, 78), 722)}
+                          y={Math.max(point.y - 33, 27)}
+                          textAnchor="middle"
+                        >
+                          {formatCurrency(point.revenue_at_risk)}
+                        </text>
+                        <text
+                          x={Math.min(Math.max(point.x, 78), 722)}
+                          y={Math.max(point.y - 18, 42)}
+                          textAnchor="middle"
+                        >
+                          {new Date(point.captured_at).toLocaleString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </text>
+                      </g>
+                    )}
+                    <text x={point.x} y="224" textAnchor="middle">
+                      {new Date(point.captured_at).toLocaleDateString("en-IN", {
+                        day: "2-digit",
+                        month: "short",
+                      })}
+                    </text>
+                  </g>
+                ))}
+                </svg>
+              </div>
+              {historicalExposureIsFlat && history.length > 1 && (
+                <p className="history-note">
+                  Exposure is unchanged across the recorded snapshots. New snapshots after
+                  inventory or disruption changes will show upward or downward movement.
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="history-empty">
+              Your first snapshot will appear here after the next analysis refresh.
+            </p>
+          )}
+        </section>
+
+        <section className={`forecast-card page-section ${activePage !== "overview" ? "hidden-page" : ""}`}>
+          <div className="section-header">
+            <h2>ML Demand Forecast</h2>
+            <p>Seven-day demand prediction from historical observations.</p>
+          </div>
+          <div className="forecast-grid">
+            {forecasts.slice(0, 6).map((forecast) => (
+              <div className="forecast-item" key={`${forecast.product_id}-${forecast.region_id}`}>
+                <strong>{forecast.product_name}</strong>
+                <span>{forecast.region_name}</span>
+                <b>{forecast.predicted_daily_demand} units/day</b>
+                <small>Trend error ±{forecast.forecast_error}</small>
+              </div>
+            ))}
+          </div>
+        </section>
+
 
         {/* INVENTORY TABLE */}
 
-        <section className="risk-section">
+        <section className={`risk-section page-section ${activePage !== "inventory" ? "hidden-page" : ""}`}>
 
           <div className="section-header">
 
@@ -530,6 +1071,20 @@ function App() {
               </p>
 
             </div>
+            <a
+              className="export-button"
+              href={`${API_URL}/api/inventory-export`}
+              download="stockshield-risk-report.csv"
+            >
+              Export CSV
+            </a>
+            {user?.role === "admin" && (
+              <label className="import-button">
+                Import CSV
+                <input type="file" accept=".csv,text/csv" onChange={importInventory} />
+              </label>
+            )}
+            {importMessage && <span className="import-message">{importMessage}</span>}
 
           </div>
 
@@ -631,12 +1186,71 @@ function App() {
 
         </section>
 
+        <section className={`account-section page-section ${activePage !== "inventory" ? "hidden-page" : ""}`}>
+          {user ? (
+            <div className="account-summary">
+              <span>Signed in as <strong>{user.username}</strong> ({user.role})</span>
+              <button
+                className="secondary-button"
+                onClick={() => {
+                  localStorage.removeItem("stockshield_token");
+                  localStorage.removeItem("stockshield_user");
+                  setUser(null);
+                }}
+              >
+                Sign out
+              </button>
+            </div>
+          ) : (
+            <div className="login-form">
+              <div>
+                <h2>Team access</h2>
+                <p>Sign in as an admin to update inventory records.</p>
+              </div>
+              <input
+                placeholder="Username"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+              />
+              <input
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                onKeyDown={(event) => event.key === "Enter" && handleLogin()}
+              />
+              <button className="inject-button" onClick={handleLogin}>Sign in</button>
+              {loginError && <span className="login-error">{loginError}</span>}
+            </div>
+          )}
+          {user?.role === "admin" && selectedItem && (
+            <div className="admin-editor">
+              <h3>Editing {selectedItem.product_name} · {selectedItem.region_name}</h3>
+              <input
+                type="number"
+                min="0"
+                value={editQuantity}
+                onChange={(event) => setEditQuantity(event.target.value)}
+                placeholder="Quantity"
+              />
+              <input
+                type="number"
+                min="1"
+                value={editCapacity}
+                onChange={(event) => setEditCapacity(event.target.value)}
+                placeholder="Capacity"
+              />
+              <button className="inject-button" onClick={saveInventory}>Save inventory</button>
+            </div>
+          )}
+        </section>
+
 
         {/* RECOVERY STRATEGIES */}
 
         {selectedItem && (
 
-          <section className="recovery-section">
+          <section className={`recovery-section page-section ${activePage !== "inventory" ? "hidden-page" : ""}`}>
 
             <div className="section-header">
 
@@ -715,6 +1329,11 @@ function App() {
                         .description
                     }
                   </p>
+                  {user?.role === "admin" && (
+                    <button className="inject-button" onClick={saveRecoveryPlan}>
+                      Track this recovery plan
+                    </button>
+                  )}
 
 
                   <div className="recommendation-details">
@@ -888,7 +1507,60 @@ function App() {
 
         {/* DISRUPTION INJECTION */}
 
-        <section className="disruption-section">
+        <section className={`plans-section page-section ${activePage !== "inventory" ? "hidden-page" : ""}`}>
+          <div className="section-header">
+            <h2>Recovery Execution</h2>
+            <p>Track approved plans through delivery.</p>
+          </div>
+          {recoveryPlans.length === 0 && <p className="history-empty">No recovery plans tracked yet.</p>}
+          <div className="plans-grid">
+            {recoveryPlans.map((plan) => (
+              <div className="plan-card" key={plan.id}>
+                <strong>{plan.strategy}</strong>
+                <span>{plan.product_id} · {plan.region_id}</span>
+                <p>{plan.description}</p>
+                <select
+                  value={plan.status}
+                  disabled={user?.role !== "admin"}
+                  onChange={(event) => updatePlanStatus(plan.id, event.target.value)}
+                >
+                  {["Recommended", "Approved", "Ordered", "In Transit", "Delivered", "Cancelled"].map((status) => (
+                    <option value={status} key={status}>{status}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className={`supplier-section page-section ${activePage !== "inventory" ? "hidden-page" : ""}`}>
+          <div className="section-header">
+            <h2>Supplier Intelligence</h2>
+            <p>Performance scorecards for replenishment decisions.</p>
+          </div>
+          <div className="supplier-grid">
+            {supplierScorecards.map((supplier) => (
+              <div className="supplier-card" key={supplier.supplier_id}>
+                <div className="supplier-card-heading">
+                  <strong>{supplier.supplier_name}</strong>
+                  <b>{supplier.performance_score}/100</b>
+                </div>
+                <div className="supplier-meter">
+                  <span style={{ width: `${supplier.performance_score}%` }} />
+                </div>
+                <p>{supplier.recommendation}</p>
+                <div className="supplier-stats">
+                  <span>Reliability <b>{Math.round(supplier.reliability * 100)}%</b></span>
+                  <span>Lead time <b>{supplier.lead_time_days} days</b></span>
+                  <span>High risk <b>{supplier.high_risk_locations}</b></span>
+                  <span>Exposure <b>{formatCurrency(supplier.revenue_exposure)}</b></span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className={`disruption-section page-section ${activePage !== "disruptions" ? "hidden-page" : ""}`}>
 
           <div className="section-header">
 
@@ -1131,6 +1803,22 @@ function App() {
                 : "Inject Disruption & Replan"}
 
             </button>
+           <button
+             className="scenario-button"
+             onClick={handleScenarioSimulation}
+             disabled={scenarioLoading}
+           >
+             {scenarioLoading
+               ? "Comparing Scenario..."
+               : "Simulate Combined Scenario"}
+           </button>
+           <button
+             className="clear-button"
+             onClick={clearDisruptionForm}
+             disabled={disruptionLoading || scenarioLoading}
+           >
+             Clear selections
+           </button>
 
           </div>
 
@@ -1270,6 +1958,43 @@ function App() {
 
                         )}
 
+                        {scenarioResult && (
+                          <div className="scenario-result">
+                            <h2>Combined Scenario Impact</h2>
+                            <p>
+                              {scenarioResult.disruptions.length} disruptions modeled together.
+                              {" "}Scenario {scenarioResult.scenario_id}
+                            </p>
+                            <div className="scenario-tags">
+                              {scenarioResult.disruptions.map((disruption, index) => (
+                                <span key={`${disruption.type}-${index}`}>
+                                  {disruption.type === "demand_shock"
+                                    ? `Demand +${disruption.increase_percentage}% · ${disruption.product_id}/${disruption.region_id}`
+                                    : `Supplier delay +${disruption.delay_days} days · ${disruption.supplier_id}`}
+                                </span>
+                              ))}
+                            </div>
+                            <div className="disruption-info">
+                              <div>
+                                <span>Baseline Risk</span>
+                                <strong>{formatCurrency(scenarioResult.baseline_revenue_at_risk)}</strong>
+                              </div>
+                              <div>
+                                <span>Scenario Risk</span>
+                                <strong>{formatCurrency(scenarioResult.scenario_revenue_at_risk)}</strong>
+                              </div>
+                              <div>
+                                <span>Additional Exposure</span>
+                                <strong>{formatCurrency(scenarioResult.additional_revenue_at_risk)}</strong>
+                              </div>
+                              <div>
+                                <span>High-Risk Locations</span>
+                                <strong>{scenarioResult.high_risk_locations}</strong>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                       </strong>
 
                     </div>
@@ -1329,6 +2054,26 @@ function App() {
         </section>
 
       </main>
+
+      <button
+        className={`assistant-launcher ${draggingAssistant ? "dragging" : ""}`}
+        style={{
+          right: `${assistantPosition.right}px`,
+          bottom: `${assistantPosition.bottom}px`,
+        }}
+        onMouseDown={handleAssistantDrag}
+        onClick={() => {
+          if (!assistantMovedRef.current) {
+            setAssistantOpen((isOpen) => !isOpen);
+          }
+          assistantMovedRef.current = false;
+        }}
+        aria-label="Open AI assistant"
+        title="Drag to move, click to open AI assistant"
+      >
+        <span>✦</span>
+        <b>Ask AI</b>
+      </button>
 
     </div>
   );
