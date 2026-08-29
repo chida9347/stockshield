@@ -29,6 +29,13 @@ def build_supplier_scorecards(data, analysis):
                 "high_risk_locations": summary["high_risk"],
                 "revenue_exposure": round(summary["revenue"], 2),
                 "performance_score": score,
+                "risk_level": (
+                    "High"
+                    if summary["high_risk"] > 0 or score < 55
+                    else "Medium"
+                    if score < 75
+                    else "Low"
+                ),
                 "recommendation": (
                     "Preferred for urgent replenishment"
                     if score >= 70

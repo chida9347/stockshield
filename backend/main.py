@@ -34,6 +34,7 @@ from database import (
     load_data,
     record_inventory_snapshot,
     update_inventory,
+    update_user_password,
 )
 
 
@@ -79,6 +80,11 @@ class DisruptionRequest(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=6, max_length=128)
 
 
 class InventoryUpdateRequest(BaseModel):
@@ -173,6 +179,15 @@ def login(request: LoginRequest):
 @app.get("/api/auth/me")
 def me(user=Depends(current_user)):
     return {"user": user}
+
+
+@app.patch("/api/auth/password")
+def change_password(request: PasswordChangeRequest, user=Depends(current_user)):
+    try:
+        update_user_password(user["user_id"], request.current_password, request.new_password)
+        return {"status": "Password updated"}
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
 
 
 @app.put("/api/inventory/{product_id}/{region_id}")

@@ -141,10 +141,28 @@ def _initialize(connection):
         connection.commit()
 
     if connection.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
-        password = os.getenv("STOCKSHIELD_ADMIN_PASSWORD", "admin123")
+        admin_password = os.getenv("STOCKSHIELD_ADMIN_PASSWORD", "admin123")
+        viewer_password = os.getenv("STOCKSHIELD_VIEWER_PASSWORD", "viewer123")
         connection.execute(
-            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-            ("admin", hash_password(password), "admin"),
+            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?), (?, ?, ?)",
+            (
+                "admin",
+                hash_password(admin_password),
+                "admin",
+                "user",
+                hash_password(viewer_password),
+                "viewer",
+            ),
+        )
+        connection.commit()
+    else:
+        connection.execute(
+            "INSERT OR IGNORE INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+            (
+                "user",
+                hash_password(os.getenv("STOCKSHIELD_VIEWER_PASSWORD", "viewer123")),
+                "viewer",
+            ),
         )
         connection.commit()
 
@@ -194,6 +212,23 @@ def authenticate_user(username, password):
         ):
             return None
         return {"id": row["id"], "username": row["username"], "role": row["role"]}
+
+
+def update_user_password(user_id, current_password, new_password):
+    if len(new_password) < 6:
+        raise ValueError("New password must be at least 6 characters")
+    with _connect() as connection:
+        _initialize(connection)
+        row = connection.execute(
+            "SELECT password_hash FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        if not row or row["password_hash"] != hash_password(current_password):
+            raise ValueError("Current password is incorrect")
+        connection.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (hash_password(new_password), user_id),
+        )
+        connection.commit()
 
 
 def update_inventory(product_id, region_id, supplier_id, quantity, capacity):

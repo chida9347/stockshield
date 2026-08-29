@@ -30,8 +30,12 @@ function App() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [loginRole, setLoginRole] = useState("admin");
   const [editQuantity, setEditQuantity] = useState("");
   const [editCapacity, setEditCapacity] = useState("");
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ current: "", next: "" });
+  const [passwordMessage, setPasswordMessage] = useState("");
 
   // Recovery simulation
   const [selectedItem, setSelectedItem] = useState(null);
@@ -263,6 +267,41 @@ function App() {
       .catch((loginException) => setLoginError(loginException.message));
   };
 
+  const signInPanel = (
+    <div className="signin-screen">
+      <div className="signin-brand">
+        <span className="signin-mark">S</span>
+        <div>
+          <strong>StockShield</strong>
+          <span>Supply chain risk intelligence</span>
+        </div>
+      </div>
+      <div className="signin-card">
+        <span className="ai-eyebrow">Secure workspace access</span>
+        <h1>Sign in to StockShield</h1>
+        <p>Choose your access type to continue to the risk dashboard.</p>
+        <div className="role-switcher">
+          {[
+            ["admin", "Administrator", "Manage inventory and recovery"],
+            ["viewer", "User", "View insights and forecasts"],
+          ].map(([role, label, description]) => (
+            <button type="button" key={role} className={loginRole === role ? "selected" : ""} onClick={() => setLoginRole(role)}>
+              <strong>{label}</strong>
+              <span>{description}</span>
+            </button>
+          ))}
+        </div>
+        <label htmlFor="signin-username">Username</label>
+        <input id="signin-username" placeholder={loginRole === "admin" ? "admin" : "user"} value={username} onChange={(event) => setUsername(event.target.value)} />
+        <label htmlFor="signin-password">Password</label>
+        <input id="signin-password" type="password" placeholder="Enter password" value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => event.key === "Enter" && handleLogin()} />
+        <button className="signin-button" onClick={handleLogin}>Sign in</button>
+        {loginError && <span className="login-error">{loginError}</span>}
+      </div>
+      <small>Authorized users only · StockShield decision support</small>
+    </div>
+  );
+
   const saveInventory = () => {
     if (!selectedItem || user?.role !== "admin") return;
     fetch(
@@ -285,6 +324,30 @@ function App() {
         window.location.reload();
       })
       .catch((saveError) => setError(saveError.message));
+  };
+
+  const changePassword = () => {
+    setPasswordMessage("");
+    fetch(`${API_URL}/api/auth/password`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("stockshield_token")}`,
+      },
+      body: JSON.stringify({
+        current_password: passwordForm.current,
+        new_password: passwordForm.next,
+      }),
+    })
+      .then((response) => response.json().then((data) => {
+        if (!response.ok) throw new Error(data.detail || "Password update failed");
+        return data;
+      }))
+      .then((data) => {
+        setPasswordMessage(data.status);
+        setPasswordForm({ current: "", next: "" });
+      })
+      .catch((passwordError) => setPasswordMessage(passwordError.message));
   };
 
   const importInventory = (event) => {
@@ -674,6 +737,10 @@ function App() {
     );
   }
 
+  if (!user) {
+    return signInPanel;
+  }
+
   // --------------------------------------------------
   // MAIN UI
   // --------------------------------------------------
@@ -693,8 +760,46 @@ function App() {
           </p>
         </div>
 
-        <div className="status">
-          ● LIVE ANALYSIS
+        <div className="header-actions">
+          <div className="status">● LIVE ANALYSIS</div>
+          <div className="profile-menu">
+            <button className="profile-button" onClick={() => setProfileOpen(!profileOpen)}>
+              <span className="profile-avatar">{user.username.charAt(0).toUpperCase()}</span>
+              <span>Profile</span>
+              <span>⌄</span>
+            </button>
+            {profileOpen && (
+              <div className="profile-dropdown">
+                <strong>{user.username}</strong>
+                <span className="profile-role">{user.role === "admin" ? "Administrator" : "User"}</span>
+                <label>Current password</label>
+                <input
+                  type="password"
+                  value={passwordForm.current}
+                  onChange={(event) => setPasswordForm({ ...passwordForm, current: event.target.value })}
+                />
+                <label>New password</label>
+                <input
+                  type="password"
+                  value={passwordForm.next}
+                  onChange={(event) => setPasswordForm({ ...passwordForm, next: event.target.value })}
+                />
+                <button className="secondary-button" onClick={changePassword}>Change password</button>
+                {passwordMessage && <small>{passwordMessage}</small>}
+                <button
+                  className="profile-signout"
+                  onClick={() => {
+                    localStorage.removeItem("stockshield_token");
+                    localStorage.removeItem("stockshield_user");
+                    setUser(null);
+                    setProfileOpen(false);
+                  }}
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
       </header>
@@ -891,6 +996,38 @@ function App() {
                       />
                     </div>
                     <strong>{formatCurrency(regionExposure)}</strong>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="visualization-card regional-demand-card">
+            <div className="section-header">
+              <h2>Regional Demand Map</h2>
+              <p>Demand intensity by operating region.</p>
+            </div>
+            <div className="regional-demand-grid">
+              {regions.map((region) => {
+                const demand = analysis
+                  .filter((item) => item.region_id === region.id)
+                  .reduce((total, item) => total + item.daily_demand, 0);
+                const maxDemand = Math.max(
+                  ...regions.map((candidate) =>
+                    analysis
+                      .filter((item) => item.region_id === candidate.id)
+                      .reduce((total, item) => total + item.daily_demand, 0)
+                  ),
+                  1
+                );
+                return (
+                  <div
+                    className="regional-demand-tile"
+                    key={region.id}
+                    style={{ "--demand-intensity": 0.12 + (demand / maxDemand) * 0.88 }}
+                  >
+                    <strong>{region.name}</strong>
+                    <span>{demand.toFixed(1)} units/day</span>
+                    <small>{region.demand_multiplier}× demand multiplier</small>
                   </div>
                 );
               })}
@@ -1147,6 +1284,13 @@ function App() {
 
                     <td>
                       {item.days_of_stock.toFixed(1)} days
+                      <small className="stockout-date">
+                        Stockout: {new Date(`${item.predicted_stockout_date}T00:00:00`).toLocaleDateString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </small>
                     </td>
 
 
@@ -1186,44 +1330,7 @@ function App() {
 
         </section>
 
-        <section className={`account-section page-section ${activePage !== "inventory" ? "hidden-page" : ""}`}>
-          {user ? (
-            <div className="account-summary">
-              <span>Signed in as <strong>{user.username}</strong> ({user.role})</span>
-              <button
-                className="secondary-button"
-                onClick={() => {
-                  localStorage.removeItem("stockshield_token");
-                  localStorage.removeItem("stockshield_user");
-                  setUser(null);
-                }}
-              >
-                Sign out
-              </button>
-            </div>
-          ) : (
-            <div className="login-form">
-              <div>
-                <h2>Team access</h2>
-                <p>Sign in as an admin to update inventory records.</p>
-              </div>
-              <input
-                placeholder="Username"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-              />
-              <input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                onKeyDown={(event) => event.key === "Enter" && handleLogin()}
-              />
-              <button className="inject-button" onClick={handleLogin}>Sign in</button>
-              {loginError && <span className="login-error">{loginError}</span>}
-            </div>
-          )}
-          {user?.role === "admin" && selectedItem && (
+        {user?.role === "admin" && selectedItem && (
             <div className="admin-editor">
               <h3>Editing {selectedItem.product_name} · {selectedItem.region_name}</h3>
               <input
@@ -1243,7 +1350,6 @@ function App() {
               <button className="inject-button" onClick={saveInventory}>Save inventory</button>
             </div>
           )}
-        </section>
 
 
         {/* RECOVERY STRATEGIES */}
@@ -1414,10 +1520,23 @@ function App() {
                     </div>
 
                   </div>
-
+                  <div className="recovery-revenue-grid">
+                    <div>
+                      <span>Lost revenue without recovery</span>
+                      <strong>{formatCurrency(simulation.recommended_strategy.baseline_lost_revenue)}</strong>
+                    </div>
+                    <div>
+                      <span>Lost revenue after recovery</span>
+                      <strong>{formatCurrency(simulation.recommended_strategy.total_expected_lost_revenue)}</strong>
+                    </div>
+                    <div>
+                      <span>Revenue protected</span>
+                      <strong>{formatCurrency(simulation.recommended_strategy.revenue_protected)}</strong>
+                    </div>
+                  </div>
                 </div>
 
-
+ 
                 <div className="strategies-grid">
 
                   {simulation.strategy_comparison?.map(
@@ -1550,6 +1669,7 @@ function App() {
                 </div>
                 <p>{supplier.recommendation}</p>
                 <div className="supplier-stats">
+                  <span>Risk <b>{supplier.risk_level}</b></span>
                   <span>Reliability <b>{Math.round(supplier.reliability * 100)}%</b></span>
                   <span>Lead time <b>{supplier.lead_time_days} days</b></span>
                   <span>High risk <b>{supplier.high_risk_locations}</b></span>

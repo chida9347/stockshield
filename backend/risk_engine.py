@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from database import load_data
 
 
@@ -232,6 +234,9 @@ def analyze_inventory(
             "daily_demand": daily_demand,
 
             "days_of_stock": days_of_stock,
+            "predicted_stockout_date": (
+                datetime.now(timezone.utc) + timedelta(days=days_of_stock)
+            ).date().isoformat(),
 
             "supplier_lead_time_days":
                 supplier_lead_time,
