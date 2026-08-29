@@ -82,6 +82,25 @@
   border-radius: 7px;
 }
 
+.profile-password-toggle,
+.profile-cancel {
+  padding: 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #f8fafc;
+  color: #334155;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.profile-cancel {
+  padding: 6px;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+}
+
 .profile-signout {
   padding: 9px;
   border: 0;
@@ -188,12 +207,46 @@
 ========================= */
 
 .hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
   background: linear-gradient(135deg, #172554, #1e3a8a);
   color: white;
-  padding: 32px;
+  padding: 34px 38px;
   border-radius: 16px;
   margin-bottom: 28px;
-  box-shadow: 0 10px 30px rgba(30, 58, 138, 0.15);
+  box-shadow: 0 16px 35px rgba(30, 58, 138, 0.2);
+  overflow: hidden;
+  position: relative;
+}
+
+.hero::after {
+  content: "";
+  position: absolute;
+  width: 260px;
+  height: 260px;
+  right: 20%;
+  top: -180px;
+  border: 1px solid rgba(165, 180, 252, 0.2);
+  border-radius: 50%;
+  box-shadow: 0 0 0 28px rgba(165, 180, 252, 0.05), 0 0 0 56px rgba(165, 180, 252, 0.04);
+}
+
+.hero-content,
+.hero-signal {
+  position: relative;
+  z-index: 1;
+}
+
+.hero-kicker {
+  display: block;
+  margin-bottom: 10px;
+  color: #a5b4fc;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
 }
 
 .hero h2 {
@@ -204,6 +257,26 @@
 .hero p {
   margin: 0;
   color: #cbd5e1;
+  font-size: 16px;
+}
+
+.hero-signal {
+  display: grid;
+  min-width: 210px;
+  gap: 5px;
+  padding: 15px 18px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, .22);
+}
+
+.hero-signal-label,
+.hero-signal span:last-child {
+  color: #c7d2fe;
+  font-size: 12px;
+}
+
+.hero-signal strong {
   font-size: 16px;
 }
 
@@ -312,11 +385,38 @@
 .stat-card {
   background: white;
   border-radius: 14px;
-  padding: 20px;
+  padding: 18px 20px 20px;
   box-shadow: 0 4px 15px rgba(15, 23, 42, 0.06);
   border: 1px solid #e2e8f0;
   transition: transform 0.2s ease;
 }
+
+.stat-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.stat-card-heading p {
+  margin: 0;
+}
+
+.stat-icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 8px;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.high-card .stat-icon { background: #fee2e2; color: #dc2626; }
+.medium-card .stat-icon { background: #fef3c7; color: #d97706; }
+.low-card .stat-icon { background: #dcfce7; color: #16a34a; }
+.revenue-card .stat-icon { background: #ede9fe; color: #7c3aed; }
 
 .stat-card:hover {
   transform: translateY(-4px);
@@ -1132,10 +1232,17 @@ tbody tr:hover {
 
   .hero {
     padding: 24px;
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .hero h2 {
     font-size: 23px;
+  }
+
+  .hero-signal {
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .risk-section {

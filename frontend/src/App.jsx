@@ -34,6 +34,7 @@ function App() {
   const [editQuantity, setEditQuantity] = useState("");
   const [editCapacity, setEditCapacity] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
+  const [passwordChangeOpen, setPasswordChangeOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current: "", next: "" });
   const [passwordMessage, setPasswordMessage] = useState("");
 
@@ -772,20 +773,44 @@ function App() {
               <div className="profile-dropdown">
                 <strong>{user.username}</strong>
                 <span className="profile-role">{user.role === "admin" ? "Administrator" : "User"}</span>
-                <label>Current password</label>
-                <input
-                  type="password"
-                  value={passwordForm.current}
-                  onChange={(event) => setPasswordForm({ ...passwordForm, current: event.target.value })}
-                />
-                <label>New password</label>
-                <input
-                  type="password"
-                  value={passwordForm.next}
-                  onChange={(event) => setPasswordForm({ ...passwordForm, next: event.target.value })}
-                />
-                <button className="secondary-button" onClick={changePassword}>Change password</button>
-                {passwordMessage && <small>{passwordMessage}</small>}
+                {!passwordChangeOpen ? (
+                  <button
+                    className="profile-password-toggle"
+                    onClick={() => {
+                      setPasswordChangeOpen(true);
+                      setPasswordMessage("");
+                    }}
+                  >
+                    Change password
+                  </button>
+                ) : (
+                  <>
+                    <label>Current password</label>
+                    <input
+                      type="password"
+                      value={passwordForm.current}
+                      onChange={(event) => setPasswordForm({ ...passwordForm, current: event.target.value })}
+                    />
+                    <label>New password</label>
+                    <input
+                      type="password"
+                      value={passwordForm.next}
+                      onChange={(event) => setPasswordForm({ ...passwordForm, next: event.target.value })}
+                    />
+                    <button className="secondary-button" onClick={changePassword}>Update password</button>
+                    <button
+                      className="profile-cancel"
+                      onClick={() => {
+                        setPasswordChangeOpen(false);
+                        setPasswordForm({ current: "", next: "" });
+                        setPasswordMessage("");
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    {passwordMessage && <small>{passwordMessage}</small>}
+                  </>
+                )}
                 <button
                   className="profile-signout"
                   onClick={() => {
@@ -793,6 +818,7 @@ function App() {
                     localStorage.removeItem("stockshield_user");
                     setUser(null);
                     setProfileOpen(false);
+                    setPasswordChangeOpen(false);
                   }}
                 >
                   Sign out
@@ -825,18 +851,21 @@ function App() {
         {/* HERO */}
 
         <section className={`hero page-section ${activePage !== "overview" ? "hidden-page" : ""}`}>
-
-          <div>
+          <div className="hero-content">
+            <span className="hero-kicker">Command center · Live intelligence</span>
             <h2>
               Supply Chain Risk Overview
             </h2>
-
             <p>
               Identify inventory shortages before they
               cause stockouts and revenue loss.
             </p>
           </div>
-
+          <div className="hero-signal">
+            <span className="hero-signal-label">Current posture</span>
+            <strong>{criticalRisk + highRisk > 0 ? "Attention required" : "Stable operations"}</strong>
+            <span>{criticalRisk + highRisk} high-priority locations</span>
+          </div>
         </section>
 
         {alerts.length > 0 && (
@@ -881,57 +910,42 @@ function App() {
         <section className={`stats-grid page-section ${activePage !== "overview" ? "hidden-page" : ""}`}>
 
           <div className="stat-card">
-
-            <p>Total Locations</p>
-
+            <div className="stat-card-heading"><span className="stat-icon">⌖</span><p>Total Locations</p></div>
             <h2>
               {analysis.length}
             </h2>
-
           </div>
 
 
           <div className="stat-card high-card">
-
-            <p>High Risk</p>
-
+            <div className="stat-card-heading"><span className="stat-icon">!</span><p>High Risk</p></div>
             <h2>
               {highRisk}
             </h2>
-
           </div>
 
 
           <div className="stat-card medium-card">
-
-            <p>Medium Risk</p>
-
+            <div className="stat-card-heading"><span className="stat-icon">~</span><p>Medium Risk</p></div>
             <h2>
               {mediumRisk}
             </h2>
-
           </div>
 
 
           <div className="stat-card low-card">
-
-            <p>Low Risk</p>
-
+            <div className="stat-card-heading"><span className="stat-icon">✓</span><p>Low Risk</p></div>
             <h2>
               {lowRisk}
             </h2>
-
           </div>
 
 
           <div className="stat-card revenue-card">
-
-            <p>Potential Revenue at Risk</p>
-
+            <div className="stat-card-heading"><span className="stat-icon">$</span><p>Potential Revenue at Risk</p></div>
             <h2>
               {formatCurrency(totalLostRevenue)}
             </h2>
-
           </div>
 
         </section>
